@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,
   DialogContent,
@@ -33,6 +35,9 @@ const municipios = [
 ];
 
 export function LoginModal({ open, onOpenChange }: LoginModalProps) {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [municipio, setMunicipio] = useState('');
@@ -44,30 +49,21 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
     setError(null);
     setLoading(true);
 
-    // Simulación de validación de login
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // Mock validation - en producción esto vendría del backend
     if (!email || !password || !municipio) {
       setError('Todos los campos son obligatorios');
       setLoading(false);
       return;
     }
 
-    // Simular validación de dispositivo/municipio
-    const deviceMunicipioId = 1; // Mock: dispositivo asignado a Bogotá
-    if (parseInt(municipio) !== deviceMunicipioId) {
-      setError('Este dispositivo no está autorizado para el municipio seleccionado');
+    try {
+      await login(email, password, parseInt(municipio));
+      onOpenChange(false);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Login exitoso (mock)
-    console.log('Login exitoso:', { email, municipio });
-    setLoading(false);
-    onOpenChange(false);
-    
-    // Aquí se redireccionaría al dashboard
   };
 
   return (

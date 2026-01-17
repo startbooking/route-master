@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
 interface TicketFormProps {
-  onSubmit: (planilla: PlanillaDespacho, dto: CreateTicketDTO) => Promise<void>;
+  onSubmit: (planilla: PlanillaDespacho, dto: CreateTicketDTO) => Promise<unknown>;
   loading: boolean;
 }
 
