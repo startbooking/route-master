@@ -97,8 +97,24 @@ export interface CreateTicketDTO {
 
 export interface Usuario {
   id: number;
+  numeroDocumento: string;
   nombreCompleto: string;
   email: string;
+  telefono?: string;
   tipoVinculacion: 'EMPLEADO' | 'CONCESION';
   municipio: Municipio;
+  empresa?: Empresa;
+  activo: boolean;
+}
+
+export interface Tablet {
+  id: number;
+  codigoDispositivo: string;
+  marca: string;
+  modelo: string;
+  imei: string;
+  municipioAsignado: Municipio;
+  usuarioActual?: Usuario;
+  activo: boolean;
+  ultimaConexion?: string;
 }

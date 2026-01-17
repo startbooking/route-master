@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 import { Usuario } from '@/types';
-import { mockUsuario } from '@/data/mockData';
+import { mockUsuarios, mockTablets } from '@/data/mockData';
 
 interface AuthContextType {
   user: Usuario | null;
@@ -18,18 +18,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Simulación de login - en producción esto sería una llamada al backend
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Mock validation - dispositivo asignado a Bogotá (id: 1)
-    const deviceMunicipioId = 1;
-    if (municipioId !== deviceMunicipioId) {
-      throw new Error('Este dispositivo no está autorizado para el municipio seleccionado');
+    // Validar que el dispositivo esté asignado al municipio (simula tablet TAB-BOG-001 asignada a Bogotá)
+    const currentTablet = mockTablets.find(t => t.codigoDispositivo === 'TAB-BOG-001');
+    if (currentTablet && currentTablet.municipioAsignado.id !== municipioId) {
+      throw new Error(`Este dispositivo (${currentTablet.codigoDispositivo}) está asignado a ${currentTablet.municipioAsignado.nombre}, no al municipio seleccionado`);
     }
 
-    // Login exitoso
-    setUser({
-      ...mockUsuario,
-      email,
-    });
-    
+    // Buscar usuario por email
+    const foundUser = mockUsuarios.find(u => u.email === email && u.activo);
+    if (!foundUser) {
+      // Si no existe, crear uno basado en el primero del municipio
+      const userByMunicipio = mockUsuarios.find(u => u.municipio.id === municipioId && u.activo);
+      if (userByMunicipio) {
+        setUser({ ...userByMunicipio, email });
+        return true;
+      }
+    }
+
+    // Login exitoso con usuario encontrado o el primero disponible
+    setUser(foundUser || mockUsuarios[0]);
     return true;
   };
 
