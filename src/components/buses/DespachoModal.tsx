@@ -59,17 +59,39 @@ export function DespachoModal({ open, onOpenChange, bus, onDespachar }: Despacho
     );
   }, [origenId, destinoId]);
 
+  // Verificar si es ruta directa (sin rutas definidas)
+  const esRutaDirecta = useMemo(() => {
+    return origenId && destinoId && rutasFiltradas.length === 0;
+  }, [origenId, destinoId, rutasFiltradas]);
+
+  // Calcular distancia estimada entre municipios para ruta directa
+  const distanciaDirecta = useMemo(() => {
+    if (!esRutaDirecta) return 0;
+    const origen = mockMunicipios.find(m => m.id === parseInt(origenId));
+    const destino = mockMunicipios.find(m => m.id === parseInt(destinoId));
+    // Distancia estimada basada en diferencia de coordenadas (simplificado)
+    // En producción se usaría API de geolocalización
+    if (origen && destino) {
+      // Estimación simple: diferencia absoluta de IDs * 100 (para demo)
+      return Math.abs(origen.id - destino.id) * 150;
+    }
+    return 0;
+  }, [esRutaDirecta, origenId, destinoId]);
+
   // Ruta seleccionada
   const rutaSeleccionada = useMemo(() => {
     if (!rutaId) return null;
     return mockRutas.find(r => r.id === parseInt(rutaId)) || null;
   }, [rutaId]);
 
-  // Verificar si requiere segundo conductor
+  // Verificar si requiere segundo conductor (ruta definida o directa > 500km)
   const requiereSegundoConductor = useMemo(() => {
+    if (esRutaDirecta) {
+      return distanciaDirecta > DISTANCIA_SEGUNDO_CONDUCTOR;
+    }
     if (!rutaSeleccionada) return false;
     return (rutaSeleccionada.distanciaKm || 0) > DISTANCIA_SEGUNDO_CONDUCTOR;
-  }, [rutaSeleccionada]);
+  }, [rutaSeleccionada, esRutaDirecta, distanciaDirecta]);
 
   // Conductor principal seleccionado
   const conductorPrincipal = useMemo(() => {
@@ -111,9 +133,9 @@ export function DespachoModal({ open, onOpenChange, bus, onDespachar }: Despacho
 
     if (!origenId) newErrors.push('Debe seleccionar el municipio de origen');
     if (!destinoId) newErrors.push('Debe seleccionar el municipio de destino');
-    if (!rutaId) newErrors.push('Debe seleccionar una ruta');
+    if (!esRutaDirecta && !rutaId) newErrors.push('Debe seleccionar una ruta');
     if (!conductorPrincipalId) newErrors.push('Debe seleccionar un conductor principal');
-    if (!documentoConductor) newErrors.push('Debe ingresar el documento del conductor');
+    if (!documentoConductor) newErrors.push('Debe ingresar el documento (Conduce)');
     if (!horaProgramada) newErrors.push('Debe ingresar la hora programada');
 
     // Validar que el conductor esté asignado al bus
@@ -143,9 +165,12 @@ export function DespachoModal({ open, onOpenChange, bus, onDespachar }: Despacho
   const handleSubmit = () => {
     if (!validateForm() || !bus) return;
 
+    const origenNombre = mockMunicipios.find(m => m.id === parseInt(origenId))?.nombre;
+    const destinoNombre = mockMunicipios.find(m => m.id === parseInt(destinoId))?.nombre;
+
     const despacho: CreateDespachoDTO = {
       busId: bus.id,
-      rutaId: parseInt(rutaId),
+      rutaId: esRutaDirecta ? undefined : parseInt(rutaId),
       conductorPrincipalId: parseInt(conductorPrincipalId),
       conductorAuxiliarId: conductorAuxiliarId ? parseInt(conductorAuxiliarId) : undefined,
       asistenteViaje: asistenteViaje || undefined,
@@ -155,7 +180,9 @@ export function DespachoModal({ open, onOpenChange, bus, onDespachar }: Despacho
 
     onDespachar(despacho);
     toast.success('Bus despachado exitosamente', {
-      description: `Ruta: ${rutaSeleccionada?.municipioOrigen?.nombre} → ${rutaSeleccionada?.municipioDestino?.nombre}`,
+      description: esRutaDirecta 
+        ? `Ruta Directa: ${origenNombre} → ${destinoNombre}`
+        : `Ruta: ${rutaSeleccionada?.municipioOrigen?.nombre} → ${rutaSeleccionada?.municipioDestino?.nombre}`,
     });
     onOpenChange(false);
   };
@@ -245,7 +272,7 @@ export function DespachoModal({ open, onOpenChange, bus, onDespachar }: Despacho
 
           {/* Selección de Ruta */}
           <div className="space-y-2">
-            <Label htmlFor="ruta">Ruta *</Label>
+            <Label htmlFor="ruta">Ruta {!esRutaDirecta ? '*' : ''}</Label>
             {origenId && destinoId ? (
               rutasFiltradas.length > 0 ? (
                 <Select value={rutaId} onValueChange={setRutaId}>
@@ -262,9 +289,17 @@ export function DespachoModal({ open, onOpenChange, bus, onDespachar }: Despacho
                   </SelectContent>
                 </Select>
               ) : (
-                <p className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/30">
-                  No hay rutas disponibles para este trayecto
-                </p>
+                <div className="p-3 border rounded-md bg-primary/5 border-primary/20">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                      Directo
+                    </Badge>
+                    <span className="text-sm font-medium">Sin ruta predefinida</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Distancia estimada: {distanciaDirecta} km
+                  </p>
+                </div>
               )
             ) : (
               <p className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/30">
@@ -282,6 +317,12 @@ export function DespachoModal({ open, onOpenChange, bus, onDespachar }: Despacho
                   </Badge>
                 )}
               </div>
+            )}
+
+            {esRutaDirecta && requiereSegundoConductor && (
+              <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 mt-2">
+                Requiere 2 conductores (distancia &gt; 500 km)
+              </Badge>
             )}
           </div>
 
@@ -313,11 +354,11 @@ export function DespachoModal({ open, onOpenChange, bus, onDespachar }: Despacho
             )}
           </div>
 
-          {/* Documento del Conductor */}
+          {/* Conduce */}
           <div className="space-y-2">
             <Label htmlFor="documentoConductor">
               <FileText className="w-4 h-4 inline mr-1" />
-              Documento del Conductor *
+              Conduce *
             </Label>
             <Input
               id="documentoConductor"

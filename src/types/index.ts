@@ -100,7 +100,7 @@ export interface CreateTicketDTO {
 
 export interface CreateDespachoDTO {
   busId: number;
-  rutaId: number;
+  rutaId?: number; // Opcional para rutas directas
   conductorPrincipalId: number;
   conductorAuxiliarId?: number; // Requerido si ruta > 500km
   asistenteViaje?: string;

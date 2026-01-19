@@ -18,7 +18,19 @@ const estadoColors: Record<EstadoBus, string> = {
 };
 
 export function BusList() {
-  const [buses, setBuses] = useState<Bus[]>(mockBuses);
+  // Ordenar buses: disponibles primero, luego despachados
+  const [buses, setBuses] = useState<Bus[]>(() => 
+    [...mockBuses].sort((a, b) => {
+      const order: Record<EstadoBus, number> = {
+        DISPONIBLE: 0,
+        DESPACHADO: 1,
+        EN_RUTA: 2,
+        MANTENIMIENTO: 3,
+        INACTIVO: 4,
+      };
+      return order[a.estado] - order[b.estado];
+    })
+  );
   const [selectedBus, setSelectedBus] = useState<Bus | null>(null);
   const [showDespachoModal, setShowDespachoModal] = useState(false);
 
@@ -32,13 +44,24 @@ export function BusList() {
   };
 
   const handleDespachar = (despacho: CreateDespachoDTO) => {
-    setBuses(prev => 
-      prev.map(bus => 
+    setBuses(prev => {
+      const updated = prev.map(bus => 
         bus.id === despacho.busId 
           ? { ...bus, estado: 'DESPACHADO' as EstadoBus }
           : bus
-      )
-    );
+      );
+      // Reordenar después del cambio
+      return updated.sort((a, b) => {
+        const order: Record<EstadoBus, number> = {
+          DISPONIBLE: 0,
+          DESPACHADO: 1,
+          EN_RUTA: 2,
+          MANTENIMIENTO: 3,
+          INACTIVO: 4,
+        };
+        return order[a.estado] - order[b.estado];
+      });
+    });
   };
 
   return (
