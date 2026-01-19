@@ -84,23 +84,24 @@ export const mockRutas: Ruta[] = [
 
 // ============================================
 // BUSES (15 buses de la flota)
+// Cada bus tiene conductores asociados (varios conductores pueden estar asignados a un solo bus)
 // ============================================
 export const mockBuses: Bus[] = [
-  { id: 1, placa: 'ABC-123', capacidad: 40, marca: 'Mercedes-Benz', modelo: 'OF-1721', estado: 'DESPACHADO', conductorAsignado: mockConductores[0] },
-  { id: 2, placa: 'DEF-456', capacidad: 42, marca: 'Volvo', modelo: 'B7R', estado: 'DESPACHADO', conductorAsignado: mockConductores[1] },
-  { id: 3, placa: 'GHI-789', capacidad: 38, marca: 'Scania', modelo: 'K310', estado: 'DESPACHADO', conductorAsignado: mockConductores[2] },
-  { id: 4, placa: 'JKL-012', capacidad: 45, marca: 'Mercedes-Benz', modelo: 'O-500', estado: 'DESPACHADO', conductorAsignado: mockConductores[3] },
-  { id: 5, placa: 'MNO-345', capacidad: 40, marca: 'Volvo', modelo: 'B9R', estado: 'EN_RUTA', conductorAsignado: mockConductores[4] },
-  { id: 6, placa: 'PQR-678', capacidad: 42, marca: 'Marcopolo', modelo: 'Paradiso', estado: 'DISPONIBLE', conductorAsignado: undefined },
-  { id: 7, placa: 'STU-901', capacidad: 38, marca: 'Scania', modelo: 'K360', estado: 'DISPONIBLE', conductorAsignado: undefined },
-  { id: 8, placa: 'VWX-234', capacidad: 44, marca: 'Mercedes-Benz', modelo: 'O-400', estado: 'MANTENIMIENTO', conductorAsignado: mockConductores[7] },
-  { id: 9, placa: 'YZA-567', capacidad: 40, marca: 'Volvo', modelo: 'B12R', estado: 'DISPONIBLE', conductorAsignado: undefined },
-  { id: 10, placa: 'BCD-890', capacidad: 42, marca: 'Irizar', modelo: 'i6', estado: 'DESPACHADO', conductorAsignado: mockConductores[5] },
-  { id: 11, placa: 'EFG-123', capacidad: 38, marca: 'Busscar', modelo: 'Panorámico', estado: 'EN_RUTA', conductorAsignado: mockConductores[6] },
-  { id: 12, placa: 'HIJ-456', capacidad: 45, marca: 'Mercedes-Benz', modelo: 'OF-1724', estado: 'DISPONIBLE', conductorAsignado: undefined },
-  { id: 13, placa: 'KLM-789', capacidad: 40, marca: 'Volvo', modelo: 'B8R', estado: 'INACTIVO', conductorAsignado: undefined },
-  { id: 14, placa: 'NOP-012', capacidad: 42, marca: 'Scania', modelo: 'K380', estado: 'DESPACHADO', conductorAsignado: mockConductores[8] },
-  { id: 15, placa: 'QRS-345', capacidad: 38, marca: 'Marcopolo', modelo: 'Viaggio', estado: 'DISPONIBLE', conductorAsignado: undefined },
+  { id: 1, placa: 'ABC-123', capacidad: 40, marca: 'Mercedes-Benz', modelo: 'OF-1721', estado: 'DESPACHADO', conductorAsignado: mockConductores[0], conductoresAsociados: [mockConductores[0], mockConductores[1]] },
+  { id: 2, placa: 'DEF-456', capacidad: 42, marca: 'Volvo', modelo: 'B7R', estado: 'DESPACHADO', conductorAsignado: mockConductores[1], conductoresAsociados: [mockConductores[1], mockConductores[2], mockConductores[3]] },
+  { id: 3, placa: 'GHI-789', capacidad: 38, marca: 'Scania', modelo: 'K310', estado: 'DESPACHADO', conductorAsignado: mockConductores[2], conductoresAsociados: [mockConductores[2], mockConductores[4]] },
+  { id: 4, placa: 'JKL-012', capacidad: 45, marca: 'Mercedes-Benz', modelo: 'O-500', estado: 'DESPACHADO', conductorAsignado: mockConductores[3], conductoresAsociados: [mockConductores[3], mockConductores[5], mockConductores[6]] },
+  { id: 5, placa: 'MNO-345', capacidad: 40, marca: 'Volvo', modelo: 'B9R', estado: 'EN_RUTA', conductorAsignado: mockConductores[4], conductoresAsociados: [mockConductores[4], mockConductores[7]] },
+  { id: 6, placa: 'PQR-678', capacidad: 42, marca: 'Marcopolo', modelo: 'Paradiso', estado: 'DISPONIBLE', conductorAsignado: undefined, conductoresAsociados: [mockConductores[5], mockConductores[6], mockConductores[8]] },
+  { id: 7, placa: 'STU-901', capacidad: 38, marca: 'Scania', modelo: 'K360', estado: 'DISPONIBLE', conductorAsignado: undefined, conductoresAsociados: [mockConductores[7], mockConductores[9]] },
+  { id: 8, placa: 'VWX-234', capacidad: 44, marca: 'Mercedes-Benz', modelo: 'O-400', estado: 'MANTENIMIENTO', conductorAsignado: mockConductores[7], conductoresAsociados: [mockConductores[7], mockConductores[10]] },
+  { id: 9, placa: 'YZA-567', capacidad: 40, marca: 'Volvo', modelo: 'B12R', estado: 'DISPONIBLE', conductorAsignado: undefined, conductoresAsociados: [mockConductores[8], mockConductores[9], mockConductores[10]] },
+  { id: 10, placa: 'BCD-890', capacidad: 42, marca: 'Irizar', modelo: 'i6', estado: 'DESPACHADO', conductorAsignado: mockConductores[5], conductoresAsociados: [mockConductores[5], mockConductores[0]] },
+  { id: 11, placa: 'EFG-123', capacidad: 38, marca: 'Busscar', modelo: 'Panorámico', estado: 'EN_RUTA', conductorAsignado: mockConductores[6], conductoresAsociados: [mockConductores[6], mockConductores[1]] },
+  { id: 12, placa: 'HIJ-456', capacidad: 45, marca: 'Mercedes-Benz', modelo: 'OF-1724', estado: 'DISPONIBLE', conductorAsignado: undefined, conductoresAsociados: [mockConductores[2], mockConductores[3], mockConductores[4]] },
+  { id: 13, placa: 'KLM-789', capacidad: 40, marca: 'Volvo', modelo: 'B8R', estado: 'INACTIVO', conductorAsignado: undefined, conductoresAsociados: [] },
+  { id: 14, placa: 'NOP-012', capacidad: 42, marca: 'Scania', modelo: 'K380', estado: 'DESPACHADO', conductorAsignado: mockConductores[8], conductoresAsociados: [mockConductores[8], mockConductores[9]] },
+  { id: 15, placa: 'QRS-345', capacidad: 38, marca: 'Marcopolo', modelo: 'Viaggio', estado: 'DISPONIBLE', conductorAsignado: undefined, conductoresAsociados: [mockConductores[10], mockConductores[0], mockConductores[1]] },
 ];
 
 // ============================================

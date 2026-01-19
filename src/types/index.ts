@@ -46,6 +46,7 @@ export interface Bus {
   modelo?: string;
   estado: EstadoBus;
   conductorAsignado?: Conductor;
+  conductoresAsociados?: Conductor[]; // Varios conductores pueden estar asignados a un bus
 }
 
 export interface Pasajero {
@@ -63,6 +64,8 @@ export interface PlanillaDespacho {
   numeroPlanilla: string;
   bus: Bus;
   conductor: Conductor;
+  conductorAuxiliar?: Conductor; // Segundo conductor para rutas > 500km
+  asistenteViaje?: string; // Nombre del asistente de viaje (opcional)
   ruta: Ruta;
   fechaDespacho: string;
   horaProgramada: string;
@@ -93,6 +96,16 @@ export interface CreateTicketDTO {
   pasajeroTelefono?: string;
   numeroAsiento?: number;
   formaPago: FormaPago;
+}
+
+export interface CreateDespachoDTO {
+  busId: number;
+  rutaId: number;
+  conductorPrincipalId: number;
+  conductorAuxiliarId?: number; // Requerido si ruta > 500km
+  asistenteViaje?: string;
+  documentoConductor: string;
+  horaProgramada: string;
 }
 
 export interface Usuario {
