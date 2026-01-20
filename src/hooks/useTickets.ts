@@ -12,6 +12,7 @@ import {
   getAsientosOcupados 
 } from '@/data/mockData';
 import { toast } from '@/hooks/use-toast';
+import { usePrinter } from '@/hooks/usePrinter';
 
 interface ValidationResult {
   valid: boolean;
@@ -22,6 +23,8 @@ interface ValidationResult {
 export function useTickets() {
   const [tickets, setTickets] = useState<Ticket[]>(mockTickets);
   const [loading, setLoading] = useState(false);
+  const [lastCreatedTicket, setLastCreatedTicket] = useState<Ticket | null>(null);
+  const printer = usePrinter();
 
   const validateTicketCreation = useCallback((
     planilla: PlanillaDespacho,
@@ -142,6 +145,12 @@ export function useTickets() {
         description: `Número: ${newTicket.numeroTicket}`,
       });
 
+      // Store last created ticket for invoice display
+      setLastCreatedTicket(newTicket);
+
+      // Auto print invoice to thermal printer
+      await printer.autoPrint(newTicket);
+
       return newTicket;
     } catch (error) {
       toast({
@@ -153,7 +162,7 @@ export function useTickets() {
     } finally {
       setLoading(false);
     }
-  }, [tickets, validateTicketCreation]);
+  }, [tickets, validateTicketCreation, printer]);
 
   const cancelTicket = useCallback(async (ticketId: number): Promise<boolean> => {
     setLoading(true);
@@ -183,8 +192,11 @@ export function useTickets() {
   return {
     tickets,
     loading,
+    lastCreatedTicket,
+    setLastCreatedTicket,
     createTicket,
     cancelTicket,
     validateTicketCreation,
+    printer,
   };
 }
