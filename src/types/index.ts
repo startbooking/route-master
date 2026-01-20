@@ -36,7 +36,7 @@ export interface Conductor {
   activo: boolean;
 }
 
-export type EstadoBus = 'DISPONIBLE' | 'DESPACHADO' | 'EN_RUTA' | 'MANTENIMIENTO' | 'INACTIVO';
+export type EstadoBus = 'DISPONIBLE' | 'DESPACHADO' | 'EN_RUTA' | 'ARRIBADO' | 'MANTENIMIENTO' | 'INACTIVO';
 
 export interface Bus {
   id: number;
