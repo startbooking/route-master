@@ -3,8 +3,10 @@
 // Vista previa de la factura del ticket
 // ============================================
 
+import { useState, useEffect } from 'react';
 import { Ticket } from '@/types';
 import { buildInvoiceData } from '@/lib/thermalPrinter';
+import QRCode from 'qrcode';
 import { 
   Dialog, 
   DialogContent, 
@@ -13,7 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Printer, X, Building2, User, MapPin, CreditCard, FileCheck } from 'lucide-react';
+import { Printer, X, Building2, User, MapPin, CreditCard, FileCheck, QrCode } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
@@ -58,6 +60,18 @@ export function InvoicePreview({
   onPrint, 
   isPrinting 
 }: InvoicePreviewProps) {
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  
+  useEffect(() => {
+    if (ticket) {
+      const data = buildInvoiceData(ticket);
+      const qrData = `https://verify.transveloz.com/ticket/${data.numeroFactura}?cude=${data.cude.substring(0, 16)}`;
+      QRCode.toDataURL(qrData, { width: 120, margin: 1 })
+        .then(url => setQrDataUrl(url))
+        .catch(err => console.error('QR generation error:', err));
+    }
+  }, [ticket]);
+  
   if (!ticket) return null;
   
   const data = buildInvoiceData(ticket);
@@ -249,6 +263,24 @@ export function InvoicePreview({
               <p><strong>Rango de Numeración:</strong></p>
               <p>{data.rangoAutorizacion}</p>
             </div>
+          </div>
+
+          <Separator className="border-dashed" />
+          
+          {/* QR Code */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 justify-center">
+              <QrCode className="w-4 h-4 text-gray-600" />
+              <span className="font-bold text-xs uppercase">Verificación Digital</span>
+            </div>
+            {qrDataUrl && (
+              <div className="flex justify-center">
+                <img src={qrDataUrl} alt="Código QR de verificación" className="w-28 h-28" />
+              </div>
+            )}
+            <p className="text-[10px] text-gray-500 text-center">
+              Escanea para verificar la autenticidad
+            </p>
           </div>
 
           <Separator className="border-dashed" />
