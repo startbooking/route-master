@@ -4,6 +4,7 @@
 // ============================================
 
 import { Ticket, Empresa } from '@/types';
+import QRCode from 'qrcode';
 
 // Información de la empresa (configurable)
 export const EMPRESA_CONFIG: Empresa & { 
@@ -67,6 +68,28 @@ export const ESCPOSCommands = {
   // Line separator
   separator: textToBytes('================================'),
   dottedSeparator: textToBytes('--------------------------------'),
+  
+  // QR Code Commands (GS ( k)
+  // Function 165: Set QR model
+  qrModel: new Uint8Array([GS, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]), // Model 2
+  // Function 167: Set QR size (1-16)
+  qrSize: (size: number) => new Uint8Array([GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, size]),
+  // Function 169: Set QR error correction (48=L, 49=M, 50=Q, 51=H)
+  qrErrorCorrection: new Uint8Array([GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31]), // M level
+  // Function 180: Store QR data
+  qrStoreData: (data: string) => {
+    const dataBytes = textToBytes(data);
+    const len = dataBytes.length + 3;
+    const pL = len % 256;
+    const pH = Math.floor(len / 256);
+    const header = new Uint8Array([GS, 0x28, 0x6B, pL, pH, 0x31, 0x50, 0x30]);
+    const result = new Uint8Array(header.length + dataBytes.length);
+    result.set(header, 0);
+    result.set(dataBytes, header.length);
+    return result;
+  },
+  // Function 181: Print QR code
+  qrPrint: new Uint8Array([GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30]),
 };
 
 // Generate CUDE (Código Único de Documento Electrónico) - Mock
@@ -320,6 +343,27 @@ export function buildInvoiceBytes(data: InvoiceData): Uint8Array {
   addLine();
   addLine();
   
+  // === QR CODE ===
+  addCommand(ESCPOSCommands.alignCenter);
+  addLine();
+  addCommand(ESCPOSCommands.boldOn);
+  addText('ESCANEA PARA VERIFICAR');
+  addLine();
+  addCommand(ESCPOSCommands.boldOff);
+  addLine();
+  
+  // Build QR data URL
+  const qrData = `https://verify.transveloz.com/ticket/${data.numeroFactura}?cude=${data.cude.substring(0, 16)}`;
+  
+  // QR Code ESC/POS Commands
+  addCommand(ESCPOSCommands.qrModel);
+  addCommand(ESCPOSCommands.qrSize(6)); // Size 6 for good readability
+  addCommand(ESCPOSCommands.qrErrorCorrection);
+  addCommand(ESCPOSCommands.qrStoreData(qrData));
+  addCommand(ESCPOSCommands.qrPrint);
+  addLine();
+  addLine();
+  
   // === FOOTER ===
   addCommand(ESCPOSCommands.alignCenter);
   addCommand(ESCPOSCommands.separator);
@@ -333,8 +377,8 @@ export function buildInvoiceBytes(data: InvoiceData): Uint8Array {
   addCommand(ESCPOSCommands.separator);
   addLine();
   
-  // Feed and cut
-  addCommand(ESCPOSCommands.feedLines(5));
+  // Feed 5 lines up before cut (more paper feed for clean cut)
+  addCommand(ESCPOSCommands.feedLines(8)); // 8 lines total (5 extra + 3 original)
   addCommand(ESCPOSCommands.partialCut);
   
   // Combine all parts
@@ -570,11 +614,24 @@ export function generateInvoiceHTML(ticket: Ticket): string {
   
   <div class="separator"></div>
   <div class="center">
+    <p class="bold">ESCANEA PARA VERIFICAR</p>
+    <div id="qrcode" style="margin: 10px auto;"></div>
+  </div>
+  <div class="separator"></div>
+  
+  <div class="center">
     <p>¡Gracias por viajar con nosotros!</p>
     <p>Conserve este tiquete hasta</p>
     <p>finalizar su viaje</p>
   </div>
   <div class="separator"></div>
+  
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script>
+    QRCode.toCanvas(document.createElement('canvas'), 'https://verify.transveloz.com/ticket/${data.numeroFactura}?cude=${data.cude.substring(0, 16)}', { width: 120 }, function(err, canvas) {
+      if (!err) document.getElementById('qrcode').appendChild(canvas);
+    });
+  </script>
 </body>
 </html>`;
 }
