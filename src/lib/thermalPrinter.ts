@@ -393,260 +393,96 @@ export function buildInvoiceBytes(data: InvoiceData): Uint8Array {
   return result;
 }
 
-// Extended navigator type for Web Serial API and WebUSB API
+// Extended navigator type for Web Serial API
 declare global {
   interface Navigator {
     serial?: {
-      requestPort(options?: { filters?: { usbVendorId?: number }[] }): Promise<SerialPortInstance>;
-      getPorts(): Promise<SerialPortInstance[]>;
-    };
-    usb?: {
-      requestDevice(options: { filters: { vendorId?: number; productId?: number }[] }): Promise<USBDeviceInstance>;
-      getDevices(): Promise<USBDeviceInstance[]>;
+      requestPort(): Promise<SerialPortInstance>;
     };
   }
 }
 
 interface SerialPortInstance {
-  open(options: { baudRate: number; dataBits?: number; stopBits?: number; parity?: string }): Promise<void>;
+  open(options: { baudRate: number; dataBits: number; stopBits: number; parity: string }): Promise<void>;
   close(): Promise<void>;
   writable?: WritableStream<Uint8Array>;
-  readable?: ReadableStream<Uint8Array>;
-  getInfo?(): { usbVendorId?: number; usbProductId?: number };
 }
 
-interface USBDeviceInstance {
-  open(): Promise<void>;
-  close(): Promise<void>;
-  selectConfiguration(configurationValue: number): Promise<void>;
-  claimInterface(interfaceNumber: number): Promise<void>;
-  releaseInterface(interfaceNumber: number): Promise<void>;
-  transferOut(endpointNumber: number, data: BufferSource): Promise<USBOutTransferResult>;
-  configuration?: {
-    interfaces: Array<{
-      interfaceNumber: number;
-      alternate: {
-        endpoints: Array<{
-          endpointNumber: number;
-          direction: 'in' | 'out';
-          type: 'bulk' | 'interrupt' | 'isochronous';
-        }>;
-      };
-    }>;
-  };
-  productName?: string;
-  manufacturerName?: string;
-  vendorId: number;
-  productId: number;
-}
-
-interface USBOutTransferResult {
-  bytesWritten: number;
-  status: 'ok' | 'stall' | 'babble';
-}
-
-// Connection type enum
-export type PrinterConnectionType = 'serial' | 'usb' | 'none';
-
-// Common thermal printer USB vendor IDs
-const THERMAL_PRINTER_VENDORS = [
-  0x04B8, // Epson
-  0x0519, // Star Micronics
-  0x0DD4, // Custom Engineering
-  0x0FE6, // ICS Electronics (CH340)
-  0x1A86, // QinHeng Electronics (CH340/CH341)
-  0x067B, // Prolific (PL2303)
-  0x0483, // STMicroelectronics
-  0x1504, // Metapace
-  0x0416, // Winbond
-  0x0525, // Netchip Technology (USB gadget)
-];
-
-// Web Serial API and WebUSB interface for thermal printer
+// Web Serial API interface for thermal printer
 class ThermalPrinterService {
-  private serialPort: SerialPortInstance | null = null;
-  private usbDevice: USBDeviceInstance | null = null;
-  private usbEndpoint: number = 0;
-  private connectionType: PrinterConnectionType = 'none';
-  private isConnectedStatus = false;
+  private port: SerialPortInstance | null = null;
+  private isConnected = false;
   
   // Check if Web Serial API is supported
-  isSerialSupported(): boolean {
+  isSupported(): boolean {
     return typeof navigator !== 'undefined' && 'serial' in navigator;
   }
   
-  // Check if WebUSB API is supported
-  isUSBSupported(): boolean {
-    return typeof navigator !== 'undefined' && 'usb' in navigator;
-  }
-  
-  // Check if any print API is supported
-  isSupported(): boolean {
-    return this.isSerialSupported() || this.isUSBSupported();
-  }
-  
-  // Get current connection type
-  getConnectionType(): PrinterConnectionType {
-    return this.connectionType;
-  }
-  
-  // Connect to the printer via Web Serial (for /dev/ttyUSB*, /dev/ttyACM*)
-  async connectSerial(): Promise<boolean> {
-    if (!this.isSerialSupported() || !navigator.serial) {
+  // Connect to the printer
+  async connect(): Promise<boolean> {
+    if (!this.isSupported()) {
       console.error('Web Serial API not supported');
       return false;
     }
     
     try {
-      // Request port with vendor filters
-      this.serialPort = await navigator.serial.requestPort({
-        filters: THERMAL_PRINTER_VENDORS.map(vendorId => ({ usbVendorId: vendorId }))
-      });
+      // Request port (this requires user gesture)
+      if (!navigator.serial) {
+        console.error('Web Serial API not available');
+        return false;
+      }
+      this.port = await navigator.serial.requestPort();
       
       // Open the port with typical thermal printer settings
-      await this.serialPort.open({
+      await this.port.open({
         baudRate: 9600,
         dataBits: 8,
         stopBits: 1,
         parity: 'none',
       });
       
-      this.connectionType = 'serial';
-      this.isConnectedStatus = true;
-      console.log('Printer connected via Web Serial API');
+      this.isConnected = true;
+      console.log('Printer connected successfully');
       return true;
     } catch (error) {
-      console.error('Failed to connect via Serial:', error);
+      console.error('Failed to connect to printer:', error);
       return false;
     }
-  }
-  
-  // Connect to the printer via WebUSB (for /dev/usb/lp* on Ubuntu - grupo lp)
-  async connectUSB(): Promise<boolean> {
-    if (!this.isUSBSupported() || !navigator.usb) {
-      console.error('WebUSB API not supported');
-      return false;
-    }
-    
-    try {
-      // Request USB device - user will see a dialog to select printer
-      this.usbDevice = await navigator.usb.requestDevice({
-        filters: THERMAL_PRINTER_VENDORS.map(vendorId => ({ vendorId }))
-      });
-      
-      await this.usbDevice.open();
-      
-      // Select the first configuration (usually configuration 1)
-      if (this.usbDevice.configuration === null || this.usbDevice.configuration === undefined) {
-        await this.usbDevice.selectConfiguration(1);
-      }
-      
-      // Find the printer interface (usually class 7 = Printer)
-      const printerInterface = this.usbDevice.configuration?.interfaces.find(iface => 
-        iface.alternate.endpoints.some(ep => ep.direction === 'out' && ep.type === 'bulk')
-      );
-      
-      if (!printerInterface) {
-        throw new Error('No se encontró interfaz de impresora válida');
-      }
-      
-      await this.usbDevice.claimInterface(printerInterface.interfaceNumber);
-      
-      // Find the OUT endpoint for sending data
-      const outEndpoint = printerInterface.alternate.endpoints.find(
-        ep => ep.direction === 'out' && ep.type === 'bulk'
-      );
-      
-      if (!outEndpoint) {
-        throw new Error('No se encontró endpoint de salida');
-      }
-      
-      this.usbEndpoint = outEndpoint.endpointNumber;
-      this.connectionType = 'usb';
-      this.isConnectedStatus = true;
-      
-      console.log(`Printer connected via WebUSB: ${this.usbDevice.productName || 'Unknown'}`);
-      console.log(`  Vendor: ${this.usbDevice.manufacturerName || 'Unknown'} (0x${this.usbDevice.vendorId.toString(16).toUpperCase()})`);
-      console.log(`  Endpoint: ${this.usbEndpoint}`);
-      
-      return true;
-    } catch (error) {
-      console.error('Failed to connect via USB:', error);
-      return false;
-    }
-  }
-  
-  // Try to connect - first USB (for Ubuntu /dev/usb/lp*), then Serial as fallback
-  async connect(): Promise<boolean> {
-    // Try WebUSB first (works with /dev/usb/lp* on Ubuntu - grupo lp)
-    if (this.isUSBSupported()) {
-      console.log('Attempting WebUSB connection (Ubuntu /dev/usb/lp*)...');
-      const usbConnected = await this.connectUSB();
-      if (usbConnected) return true;
-    }
-    
-    // Fall back to Web Serial (works with /dev/ttyUSB*, /dev/ttyACM*)
-    if (this.isSerialSupported()) {
-      console.log('Attempting Web Serial connection...');
-      const serialConnected = await this.connectSerial();
-      if (serialConnected) return true;
-    }
-    
-    console.error('No connection method available or user cancelled');
-    return false;
   }
   
   // Disconnect from the printer
   async disconnect(): Promise<void> {
-    try {
-      if (this.connectionType === 'serial' && this.serialPort) {
-        await this.serialPort.close();
-        this.serialPort = null;
-      } else if (this.connectionType === 'usb' && this.usbDevice) {
-        await this.usbDevice.close();
-        this.usbDevice = null;
-      }
-    } catch (error) {
-      console.error('Error disconnecting:', error);
+    if (this.port) {
+      await this.port.close();
+      this.port = null;
     }
     
-    this.connectionType = 'none';
-    this.isConnectedStatus = false;
+    this.isConnected = false;
   }
   
   // Get connection status
   getConnectionStatus(): boolean {
-    return this.isConnectedStatus;
+    return this.isConnected;
   }
   
   // Print raw bytes
   async printBytes(data: Uint8Array): Promise<boolean> {
-    if (!this.isConnectedStatus) {
+    if (!this.port || !this.isConnected) {
       console.error('Printer not connected');
       return false;
     }
     
     try {
-      if (this.connectionType === 'serial' && this.serialPort) {
-        const writer = this.serialPort.writable?.getWriter();
-        if (!writer) {
-          console.error('Cannot get serial writer');
-          return false;
-        }
-        await writer.write(data);
-        writer.releaseLock();
-        return true;
-        
-      } else if (this.connectionType === 'usb' && this.usbDevice) {
-        // Create a fresh ArrayBuffer copy for WebUSB compatibility
-        const buffer = new ArrayBuffer(data.length);
-        new Uint8Array(buffer).set(data);
-        const result = await this.usbDevice.transferOut(this.usbEndpoint, buffer);
-        console.log(`USB transfer: ${result.bytesWritten} bytes written, status: ${result.status}`);
-        return result.status === 'ok';
+      const writer = this.port.writable?.getWriter();
+      if (!writer) {
+        console.error('Cannot get writer');
+        return false;
       }
       
-      return false;
+      await writer.write(data);
+      writer.releaseLock();
+      
+      return true;
     } catch (error) {
       console.error('Failed to print:', error);
       return false;
