@@ -6,7 +6,7 @@ import { TicketForm } from '@/components/tickets/TicketForm';
 import { TicketList } from '@/components/tickets/TicketList';
 import { BusList } from '@/components/buses/BusList';
 import { ConsolidatedReport } from '@/components/reports/ConsolidatedReport';
-import { InvoicePreview } from '@/components/tickets/InvoicePreview';
+
 import { useTickets } from '@/hooks/useTickets';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -34,24 +34,15 @@ import {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { tickets, loading, createTicket, cancelTicket, lastCreatedTicket, setLastCreatedTicket, printer } = useTickets();
+  const { tickets, loading, createTicket, cancelTicket, printer } = useTickets();
   
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showTicketForm, setShowTicketForm] = useState(false);
   const [showConsolidated, setShowConsolidated] = useState(false);
-  const [showInvoice, setShowInvoice] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/');
-  };
-
-  const handleTicketCreated = async (planilla: any, dto: any) => {
-    const ticket = await createTicket(planilla, dto);
-    if (ticket) {
-      setShowInvoice(true);
-    }
-    return ticket;
   };
 
   return (
@@ -183,7 +174,7 @@ export default function Dashboard() {
                     Ver Lista de Tickets
                   </Button>
                 </div>
-                <TicketForm onSubmit={handleTicketCreated} loading={loading} />
+                <TicketForm onSubmit={createTicket} loading={loading} />
               </>
             ) : (
               <>
@@ -214,21 +205,6 @@ export default function Dashboard() {
         tickets={tickets}
       />
 
-      {/* Invoice Preview Modal */}
-      <InvoicePreview
-        ticket={lastCreatedTicket}
-        open={showInvoice}
-        onClose={() => {
-          setShowInvoice(false);
-          setLastCreatedTicket(null);
-        }}
-        onPrint={() => {
-          if (lastCreatedTicket) {
-            printer.autoPrint(lastCreatedTicket);
-          }
-        }}
-        isPrinting={printer.isPrinting}
-      />
     </div>
   );
 }
