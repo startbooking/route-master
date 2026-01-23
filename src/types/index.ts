@@ -131,3 +131,51 @@ export interface Tablet {
   activo: boolean;
   ultimaConexion?: string;
 }
+
+// ============================================
+// ENVÍO DE DINERO TYPES
+// ============================================
+
+export type EstadoEnvio = 'PENDIENTE' | 'EN_TRANSITO' | 'ENTREGADO' | 'CANCELADO';
+
+export interface EnvioDinero {
+  id: number;
+  numeroEnvio: string;
+  remitente: {
+    numeroDocumento: string;
+    tipoDocumento: 'CC' | 'CE' | 'TI' | 'PA';
+    nombreCompleto: string;
+    telefono?: string;
+  };
+  destinatario: {
+    numeroDocumento: string;
+    nombreCompleto: string;
+    telefono?: string;
+  };
+  monto: number;
+  comision: number;
+  montoTotal: number;
+  conductor: Conductor;
+  municipioOrigen: Municipio;
+  municipioDestino: Municipio;
+  planilla?: PlanillaDespacho;
+  estado: EstadoEnvio;
+  fechaCreacion: string;
+  fechaEntrega?: string;
+  observaciones?: string;
+}
+
+export interface CreateEnvioDineroDTO {
+  remitenteDocumento: string;
+  remitenteTipoDocumento: 'CC' | 'CE' | 'TI' | 'PA';
+  remitenteNombre: string;
+  remitenteTelefono?: string;
+  destinatarioDocumento: string;
+  destinatarioNombre: string;
+  destinatarioTelefono?: string;
+  monto: number;
+  conductorId: number;
+  municipioDestinoId: number;
+  planillaId?: number;
+  observaciones?: string;
+}
