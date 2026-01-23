@@ -6,8 +6,11 @@ import { TicketForm } from '@/components/tickets/TicketForm';
 import { TicketList } from '@/components/tickets/TicketList';
 import { BusList } from '@/components/buses/BusList';
 import { ConsolidatedReport } from '@/components/reports/ConsolidatedReport';
+import { EnvioDineroForm } from '@/components/envios/EnvioDineroForm';
+import { EnvioList } from '@/components/envios/EnvioList';
 
 import { useTickets } from '@/hooks/useTickets';
+import { useEnvioDinero } from '@/hooks/useEnvioDinero';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
@@ -20,7 +23,8 @@ import {
   User,
   ChevronDown,
   Wifi,
-  WifiOff
+  WifiOff,
+  Send
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -35,9 +39,17 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { tickets, loading, createTicket, cancelTicket, printer } = useTickets();
+  const { 
+    envios, 
+    loading: enviosLoading, 
+    createEnvio, 
+    cancelEnvio, 
+    markAsDelivered 
+  } = useEnvioDinero();
   
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showTicketForm, setShowTicketForm] = useState(false);
+  const [showEnvioForm, setShowEnvioForm] = useState(false);
   const [showConsolidated, setShowConsolidated] = useState(false);
 
   const handleLogout = () => {
@@ -139,6 +151,10 @@ export default function Dashboard() {
               <Ticket className="w-4 h-4" />
               Tickets
             </TabsTrigger>
+            <TabsTrigger value="envios" className="gap-2">
+              <Send className="w-4 h-4" />
+              Envíos
+            </TabsTrigger>
             <TabsTrigger value="buses" className="gap-2">
               <Bus className="w-4 h-4" />
               Buses
@@ -186,6 +202,42 @@ export default function Dashboard() {
                   </Button>
                 </div>
                 <TicketList tickets={tickets} onCancel={cancelTicket} />
+              </>
+            )}
+          </TabsContent>
+
+          {/* Envios Tab */}
+          <TabsContent value="envios" className="space-y-6">
+            {showEnvioForm ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold">Nuevo Envío de Dinero</h2>
+                  <Button variant="outline" onClick={() => setShowEnvioForm(false)}>
+                    Ver Lista de Envíos
+                  </Button>
+                </div>
+                {user?.municipio && (
+                  <EnvioDineroForm 
+                    onSubmit={createEnvio} 
+                    loading={enviosLoading} 
+                    municipioOrigen={user.municipio}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold">Envíos de Dinero</h2>
+                  <Button onClick={() => setShowEnvioForm(true)} className="gap-2">
+                    <PlusCircle className="w-4 h-4" />
+                    Nuevo Envío
+                  </Button>
+                </div>
+                <EnvioList 
+                  envios={envios} 
+                  onCancel={cancelEnvio}
+                  onMarkDelivered={markAsDelivered}
+                />
               </>
             )}
           </TabsContent>

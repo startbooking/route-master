@@ -3,7 +3,7 @@
 // Para impresoras Epson TM-U (TMU220, TMU295, etc.)
 // ============================================
 
-import { Ticket, Empresa } from '@/types';
+import { Ticket, Empresa, EnvioDinero } from '@/types';
 import QRCode from 'qrcode';
 
 // Información de la empresa (configurable)
@@ -498,7 +498,8 @@ class ThermalPrinterService {
 }
 
 // Singleton instance
-export const thermalPrinter = new ThermalPrinterService();
+export const ThermalPrinter = new ThermalPrinterService();
+export const thermalPrinter = ThermalPrinter; // Alias for backwards compatibility
 
 // Generate printable HTML for fallback/preview
 export function generateInvoiceHTML(ticket: Ticket): string {
@@ -629,6 +630,394 @@ export function generateInvoiceHTML(ticket: Ticket): string {
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script>
     QRCode.toCanvas(document.createElement('canvas'), 'https://verify.transveloz.com/ticket/${data.numeroFactura}?cude=${data.cude.substring(0, 16)}', { width: 120 }, function(err, canvas) {
+      if (!err) document.getElementById('qrcode').appendChild(canvas);
+    });
+  </script>
+</body>
+</html>`;
+}
+
+// ============================================
+// ENVÍO DE DINERO RECEIPTS
+// ============================================
+
+// Format currency for envios
+function formatEnvioCurrency(value: number): string {
+  return `$${value.toLocaleString('es-CO')}`;
+}
+
+// Format date for envios
+function formatEnvioDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('es-CO', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+// Format time for envios
+function formatEnvioTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleTimeString('es-CO', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+}
+
+// Build ESC/POS byte array for envio receipt
+export function buildEnvioReciboBytes(envio: EnvioDinero, tipo: 'remitente' | 'conductor'): Uint8Array {
+  const parts: Uint8Array[] = [];
+  
+  const addCommand = (cmd: Uint8Array) => parts.push(cmd);
+  const addText = (text: string) => parts.push(textToBytes(text));
+  const addLine = () => addCommand(ESCPOSCommands.lineFeed);
+  
+  // Initialize
+  addCommand(ESCPOSCommands.init);
+  
+  // === HEADER ===
+  addCommand(ESCPOSCommands.alignCenter);
+  addCommand(ESCPOSCommands.boldOn);
+  addCommand(ESCPOSCommands.doubleSize);
+  addText(EMPRESA_CONFIG.razonSocial);
+  addLine();
+  addCommand(ESCPOSCommands.normalSize);
+  addCommand(ESCPOSCommands.boldOff);
+  
+  addText(`NIT: ${EMPRESA_CONFIG.nit}`);
+  addLine();
+  addText(EMPRESA_CONFIG.direccion);
+  addLine();
+  addText(`Tel: ${EMPRESA_CONFIG.telefono}`);
+  addLine();
+  addLine();
+  
+  // === TITLE ===
+  addCommand(ESCPOSCommands.separator);
+  addLine();
+  addCommand(ESCPOSCommands.boldOn);
+  addCommand(ESCPOSCommands.doubleHeight);
+  addText('RECIBO ENVÍO DE DINERO');
+  addLine();
+  addCommand(ESCPOSCommands.normalSize);
+  addText(tipo === 'conductor' ? '(COPIA CONDUCTOR)' : '(COPIA CLIENTE)');
+  addLine();
+  addCommand(ESCPOSCommands.boldOff);
+  addCommand(ESCPOSCommands.separator);
+  addLine();
+  addLine();
+  
+  // === ENVIO INFO ===
+  addCommand(ESCPOSCommands.alignLeft);
+  addCommand(ESCPOSCommands.boldOn);
+  addText(`No. Envío: ${envio.numeroEnvio}`);
+  addLine();
+  addCommand(ESCPOSCommands.boldOff);
+  addText(`Fecha: ${formatEnvioDate(envio.fechaCreacion)}`);
+  addLine();
+  addText(`Hora: ${formatEnvioTime(envio.fechaCreacion)}`);
+  addLine();
+  addLine();
+  
+  // === REMITENTE ===
+  addCommand(ESCPOSCommands.alignCenter);
+  addCommand(ESCPOSCommands.dottedSeparator);
+  addLine();
+  addCommand(ESCPOSCommands.boldOn);
+  addText('DATOS DEL REMITENTE');
+  addLine();
+  addCommand(ESCPOSCommands.dottedSeparator);
+  addLine();
+  addCommand(ESCPOSCommands.boldOff);
+  addCommand(ESCPOSCommands.alignLeft);
+  addLine();
+  
+  addText(`Nombre: ${envio.remitente.nombreCompleto}`);
+  addLine();
+  addText(`${envio.remitente.tipoDocumento}: ${envio.remitente.numeroDocumento}`);
+  addLine();
+  if (envio.remitente.telefono) {
+    addText(`Tel: ${envio.remitente.telefono}`);
+    addLine();
+  }
+  addLine();
+  
+  // === DESTINATARIO ===
+  addCommand(ESCPOSCommands.alignCenter);
+  addCommand(ESCPOSCommands.dottedSeparator);
+  addLine();
+  addCommand(ESCPOSCommands.boldOn);
+  addText('DATOS DEL DESTINATARIO');
+  addLine();
+  addCommand(ESCPOSCommands.dottedSeparator);
+  addLine();
+  addCommand(ESCPOSCommands.boldOff);
+  addCommand(ESCPOSCommands.alignLeft);
+  addLine();
+  
+  addText(`Nombre: ${envio.destinatario.nombreCompleto}`);
+  addLine();
+  addText(`Doc: ${envio.destinatario.numeroDocumento}`);
+  addLine();
+  if (envio.destinatario.telefono) {
+    addText(`Tel: ${envio.destinatario.telefono}`);
+    addLine();
+  }
+  addText(`Ciudad: ${envio.municipioDestino.nombre}`);
+  addLine();
+  addLine();
+  
+  // === CONDUCTOR (Solo en recibo conductor) ===
+  if (tipo === 'conductor') {
+    addCommand(ESCPOSCommands.alignCenter);
+    addCommand(ESCPOSCommands.dottedSeparator);
+    addLine();
+    addCommand(ESCPOSCommands.boldOn);
+    addText('CONDUCTOR RESPONSABLE');
+    addLine();
+    addCommand(ESCPOSCommands.dottedSeparator);
+    addLine();
+    addCommand(ESCPOSCommands.boldOff);
+    addCommand(ESCPOSCommands.alignLeft);
+    addLine();
+    
+    addText(`Nombre: ${envio.conductor.nombreCompleto}`);
+    addLine();
+    addText(`Lic: ${envio.conductor.licenciaNumero}`);
+    addLine();
+    addLine();
+  }
+  
+  // === INFORMACIÓN FINANCIERA ===
+  addCommand(ESCPOSCommands.alignCenter);
+  addCommand(ESCPOSCommands.dottedSeparator);
+  addLine();
+  addCommand(ESCPOSCommands.boldOn);
+  addText('DETALLE DEL ENVÍO');
+  addLine();
+  addCommand(ESCPOSCommands.dottedSeparator);
+  addLine();
+  addCommand(ESCPOSCommands.boldOff);
+  addCommand(ESCPOSCommands.alignLeft);
+  addLine();
+  
+  addText(`Origen: ${envio.municipioOrigen.nombre}`);
+  addLine();
+  addText(`Destino: ${envio.municipioDestino.nombre}`);
+  addLine();
+  addLine();
+  
+  addText(`Monto Enviado   ${formatEnvioCurrency(envio.monto)}`);
+  addLine();
+  addText(`Comisión (5%)   ${formatEnvioCurrency(envio.comision)}`);
+  addLine();
+  addCommand(ESCPOSCommands.separator);
+  addLine();
+  addCommand(ESCPOSCommands.boldOn);
+  addCommand(ESCPOSCommands.doubleHeight);
+  addText(`TOTAL    ${formatEnvioCurrency(envio.montoTotal)}`);
+  addLine();
+  addCommand(ESCPOSCommands.normalSize);
+  addCommand(ESCPOSCommands.boldOff);
+  addCommand(ESCPOSCommands.separator);
+  addLine();
+  addLine();
+  
+  // === QR CODE ===
+  addCommand(ESCPOSCommands.alignCenter);
+  addCommand(ESCPOSCommands.boldOn);
+  addText('ESCANEA PARA VERIFICAR');
+  addLine();
+  addCommand(ESCPOSCommands.boldOff);
+  addLine();
+  
+  const qrData = `https://verify.transveloz.com/envio/${envio.numeroEnvio}`;
+  addCommand(ESCPOSCommands.qrModel);
+  addCommand(ESCPOSCommands.qrSize(6));
+  addCommand(ESCPOSCommands.qrErrorCorrection);
+  addCommand(ESCPOSCommands.qrStoreData(qrData));
+  addCommand(ESCPOSCommands.qrPrint);
+  addLine();
+  addLine();
+  
+  // === FIRMA (Solo conductor) ===
+  if (tipo === 'conductor') {
+    addCommand(ESCPOSCommands.alignCenter);
+    addText('_____________________________');
+    addLine();
+    addText('Firma del Conductor');
+    addLine();
+    addLine();
+  }
+  
+  // === FOOTER ===
+  addCommand(ESCPOSCommands.alignCenter);
+  addCommand(ESCPOSCommands.separator);
+  addLine();
+  if (tipo === 'remitente') {
+    addText('¡Gracias por su confianza!');
+    addLine();
+    addText('Conserve este recibo como');
+    addLine();
+    addText('comprobante del envío');
+  } else {
+    addText('DOCUMENTO DEL CONDUCTOR');
+    addLine();
+    addText('Este recibo es responsabilidad');
+    addLine();
+    addText('del conductor hasta la entrega');
+  }
+  addLine();
+  addCommand(ESCPOSCommands.separator);
+  addLine();
+  
+  // Feed lines and cut
+  addCommand(ESCPOSCommands.feedLines(8));
+  addCommand(ESCPOSCommands.partialCut);
+  
+  // Combine all parts
+  const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const part of parts) {
+    result.set(part, offset);
+    offset += part.length;
+  }
+  
+  return result;
+}
+
+// Generate printable HTML for envio receipt
+export function generateEnvioReciboHTML(envio: EnvioDinero, tipo: 'remitente' | 'conductor'): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Recibo Envío ${envio.numeroEnvio} - ${tipo === 'conductor' ? 'Conductor' : 'Cliente'}</title>
+  <style>
+    @page {
+      size: 80mm auto;
+      margin: 0;
+    }
+    body {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      width: 72mm;
+      margin: 4mm;
+      line-height: 1.3;
+    }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .double { font-size: 16px; font-weight: bold; }
+    .separator { border-top: 1px dashed #000; margin: 8px 0; }
+    .total { font-size: 14px; font-weight: bold; }
+    .small { font-size: 10px; }
+    h1 { font-size: 14px; margin: 0; }
+    h2 { font-size: 12px; margin: 8px 0 4px; }
+    p { margin: 2px 0; }
+    .row { display: flex; justify-content: space-between; }
+    .signature { margin-top: 20px; border-top: 1px solid #000; width: 80%; margin-left: auto; margin-right: auto; padding-top: 5px; }
+  </style>
+</head>
+<body>
+  <div class="center">
+    <h1>${EMPRESA_CONFIG.razonSocial}</h1>
+    <p>NIT: ${EMPRESA_CONFIG.nit}</p>
+    <p>${EMPRESA_CONFIG.direccion}</p>
+    <p>Tel: ${EMPRESA_CONFIG.telefono}</p>
+  </div>
+  
+  <div class="separator"></div>
+  <div class="center bold">
+    <p class="double">RECIBO ENVÍO DE DINERO</p>
+    <p>${tipo === 'conductor' ? '(COPIA CONDUCTOR)' : '(COPIA CLIENTE)'}</p>
+  </div>
+  <div class="separator"></div>
+  
+  <p class="bold">No. Envío: ${envio.numeroEnvio}</p>
+  <p>Fecha: ${formatEnvioDate(envio.fechaCreacion)}</p>
+  <p>Hora: ${formatEnvioTime(envio.fechaCreacion)}</p>
+  
+  <div class="separator"></div>
+  <h2 class="center">DATOS DEL REMITENTE</h2>
+  <div class="separator"></div>
+  
+  <p>Nombre: ${envio.remitente.nombreCompleto}</p>
+  <p>${envio.remitente.tipoDocumento}: ${envio.remitente.numeroDocumento}</p>
+  ${envio.remitente.telefono ? `<p>Tel: ${envio.remitente.telefono}</p>` : ''}
+  
+  <div class="separator"></div>
+  <h2 class="center">DATOS DEL DESTINATARIO</h2>
+  <div class="separator"></div>
+  
+  <p>Nombre: ${envio.destinatario.nombreCompleto}</p>
+  <p>Doc: ${envio.destinatario.numeroDocumento}</p>
+  ${envio.destinatario.telefono ? `<p>Tel: ${envio.destinatario.telefono}</p>` : ''}
+  <p>Ciudad: ${envio.municipioDestino.nombre}</p>
+  
+  ${tipo === 'conductor' ? `
+  <div class="separator"></div>
+  <h2 class="center">CONDUCTOR RESPONSABLE</h2>
+  <div class="separator"></div>
+  
+  <p>Nombre: ${envio.conductor.nombreCompleto}</p>
+  <p>Licencia: ${envio.conductor.licenciaNumero}</p>
+  ` : ''}
+  
+  <div class="separator"></div>
+  <h2 class="center">DETALLE DEL ENVÍO</h2>
+  <div class="separator"></div>
+  
+  <p>Origen: ${envio.municipioOrigen.nombre}</p>
+  <p>Destino: ${envio.municipioDestino.nombre}</p>
+  
+  <div class="row">
+    <span>Monto Enviado</span>
+    <span>${formatEnvioCurrency(envio.monto)}</span>
+  </div>
+  <div class="row">
+    <span>Comisión (5%)</span>
+    <span>${formatEnvioCurrency(envio.comision)}</span>
+  </div>
+  <div class="separator"></div>
+  <div class="row total">
+    <span>TOTAL</span>
+    <span>${formatEnvioCurrency(envio.montoTotal)}</span>
+  </div>
+  <div class="separator"></div>
+  
+  <div class="center">
+    <p class="bold">ESCANEA PARA VERIFICAR</p>
+    <div id="qrcode" style="margin: 10px auto;"></div>
+  </div>
+  
+  ${tipo === 'conductor' ? `
+  <div class="signature center">
+    <p>Firma del Conductor</p>
+  </div>
+  ` : ''}
+  
+  <div class="separator"></div>
+  <div class="center">
+    ${tipo === 'remitente' ? `
+    <p>¡Gracias por su confianza!</p>
+    <p>Conserve este recibo como</p>
+    <p>comprobante del envío</p>
+    ` : `
+    <p>DOCUMENTO DEL CONDUCTOR</p>
+    <p>Este recibo es responsabilidad</p>
+    <p>del conductor hasta la entrega</p>
+    `}
+  </div>
+  <div class="separator"></div>
+  
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script>
+    QRCode.toCanvas(document.createElement('canvas'), 'https://verify.transveloz.com/envio/${envio.numeroEnvio}', { width: 120 }, function(err, canvas) {
       if (!err) document.getElementById('qrcode').appendChild(canvas);
     });
   </script>
