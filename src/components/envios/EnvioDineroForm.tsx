@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { CreateEnvioDineroDTO, Municipio } from '@/types';
-import { mockMunicipios, mockConductores, mockBuses } from '@/data/mockData';
+import { CreateEnvioDineroDTO, Municipio, Bus } from '@/types';
+import { mockMunicipios, mockBuses, mockRutas, mockPlanillas } from '@/data/mockData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,9 +22,10 @@ import {
   User, 
   MapPin, 
   DollarSign, 
-  Truck,
+  Bus as BusIcon,
   Phone,
-  FileText
+  FileText,
+  Clock
 } from 'lucide-react';
 
 const envioDineroSchema = z.object({
@@ -36,7 +37,7 @@ const envioDineroSchema = z.object({
   destinatarioNombre: z.string().min(3, 'Nombre requerido').max(100),
   destinatarioTelefono: z.string().optional(),
   monto: z.number().min(1000, 'Monto mínimo: $1,000'),
-  conductorId: z.number().min(1, 'Seleccione un conductor'),
+  busId: z.number().min(1, 'Seleccione un bus'),
   municipioDestinoId: z.number().min(1, 'Seleccione destino'),
   observaciones: z.string().optional(),
 });
@@ -51,21 +52,67 @@ const COMISION_PORCENTAJE = 0.05;
 
 export function EnvioDineroForm({ onSubmit, loading, municipioOrigen }: EnvioDineroFormProps) {
   const [monto, setMonto] = useState<number>(0);
-
-  // Get conductores from buses that are DESPACHADO from this municipality
-  const conductoresDisponibles = useMemo(() => {
-    const busesDespachados = mockBuses.filter(b => 
-      b.estado === 'DESPACHADO' && b.conductorAsignado
-    );
-    return busesDespachados
-      .map(b => b.conductorAsignado!)
-      .filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i);
-  }, []);
+  const [selectedDestinoId, setSelectedDestinoId] = useState<number>(0);
 
   // Filter destinations (exclude origin)
   const municipiosDestino = useMemo(() => {
     return mockMunicipios.filter(m => m.id !== municipioOrigen.id && m.activo);
   }, [municipioOrigen]);
+
+  // Get buses available for the selected destination route
+  const busesDisponibles = useMemo(() => {
+    if (!selectedDestinoId) return [];
+
+    // Find planillas going to the selected destination
+    const planillasDestino = mockPlanillas.filter(p => {
+      // Check if route matches origin -> destination
+      return (
+        (p.estado === 'DESPACHADO' || p.estado === 'PROGRAMADO') &&
+        p.ruta.municipioOrigenId === municipioOrigen.id &&
+        p.ruta.municipioDestinoId === selectedDestinoId
+      );
+    });
+
+    // Get buses from those planillas
+    const busesFromPlanillas = planillasDestino.map(p => ({
+      bus: p.bus,
+      hora: p.horaProgramada,
+      conductor: p.conductor,
+      planilla: p
+    }));
+
+    // Also check buses with DESPACHADO status going to that destination
+    const busesDespachados = mockBuses.filter(b => 
+      b.estado === 'DESPACHADO' && 
+      b.conductorAsignado
+    );
+
+    // Combine and deduplicate
+    const allBuses: { bus: Bus; hora: string; conductorNombre: string }[] = [];
+    
+    busesFromPlanillas.forEach(item => {
+      if (!allBuses.find(b => b.bus.id === item.bus.id)) {
+        allBuses.push({
+          bus: item.bus,
+          hora: item.hora,
+          conductorNombre: item.conductor.nombreCompleto
+        });
+      }
+    });
+
+    // Add buses without specific planilla (Directo route)
+    busesDespachados.forEach(bus => {
+      if (!allBuses.find(b => b.bus.id === bus.id)) {
+        allBuses.push({
+          bus,
+          hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+          conductorNombre: bus.conductorAsignado?.nombreCompleto || 'Sin asignar'
+        });
+      }
+    });
+
+    return allBuses;
+  }, [selectedDestinoId, municipioOrigen]);
 
   const {
     register,
@@ -79,20 +126,27 @@ export function EnvioDineroForm({ onSubmit, loading, municipioOrigen }: EnvioDin
     defaultValues: {
       remitenteTipoDocumento: 'CC',
       monto: 0,
-      conductorId: 0,
+      busId: 0,
       municipioDestinoId: 0,
     },
   });
 
   const watchMonto = watch('monto');
+  const watchBusId = watch('busId');
   const comision = Math.round((watchMonto || 0) * COMISION_PORCENTAJE);
   const montoTotal = (watchMonto || 0) + comision;
+
+  // Get selected bus info
+  const selectedBusInfo = useMemo(() => {
+    return busesDisponibles.find(b => b.bus.id === watchBusId);
+  }, [busesDisponibles, watchBusId]);
 
   const handleFormSubmit = async (data: CreateEnvioDineroDTO) => {
     const result = await onSubmit(data, municipioOrigen);
     if (result) {
       reset();
       setMonto(0);
+      setSelectedDestinoId(0);
     }
   };
 
@@ -103,6 +157,11 @@ export function EnvioDineroForm({ onSubmit, loading, municipioOrigen }: EnvioDin
       minimumFractionDigits: 0,
     }).format(value);
   };
+
+  // Reset bus when destination changes
+  useEffect(() => {
+    setValue('busId', 0);
+  }, [selectedDestinoId, setValue]);
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
@@ -215,7 +274,11 @@ export function EnvioDineroForm({ onSubmit, loading, municipioOrigen }: EnvioDin
             <div>
               <Label>Ciudad Destino</Label>
               <Select
-                onValueChange={(value) => setValue('municipioDestinoId', parseInt(value))}
+                onValueChange={(value) => {
+                  const id = parseInt(value);
+                  setSelectedDestinoId(id);
+                  setValue('municipioDestinoId', id);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccione destino" />
@@ -236,7 +299,7 @@ export function EnvioDineroForm({ onSubmit, loading, municipioOrigen }: EnvioDin
         </Card>
       </div>
 
-      {/* Monto y Conductor */}
+      {/* Monto y Bus */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-4">
@@ -268,34 +331,54 @@ export function EnvioDineroForm({ onSubmit, loading, municipioOrigen }: EnvioDin
 
               <div>
                 <Label className="flex items-center gap-1">
-                  <Truck className="w-3 h-3" />
-                  Conductor
+                  <BusIcon className="w-3 h-3" />
+                  Bus (según ruta)
                 </Label>
                 <Select
-                  onValueChange={(value) => setValue('conductorId', parseInt(value))}
+                  onValueChange={(value) => setValue('busId', parseInt(value))}
+                  disabled={!selectedDestinoId}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccione conductor" />
+                    <SelectValue placeholder={selectedDestinoId ? "Seleccione bus" : "Primero seleccione destino"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {conductoresDisponibles.length === 0 ? (
+                    {busesDisponibles.length === 0 ? (
                       <SelectItem value="0" disabled>
-                        No hay conductores disponibles
+                        No hay buses disponibles para esta ruta
                       </SelectItem>
                     ) : (
-                      conductoresDisponibles.map((c) => (
-                        <SelectItem key={c.id} value={c.id.toString()}>
-                          {c.nombreCompleto} - {c.licenciaNumero}
+                      busesDisponibles.map((item) => (
+                        <SelectItem key={item.bus.id} value={item.bus.id.toString()}>
+                          {item.bus.placa} - {item.hora} - {item.conductorNombre}
                         </SelectItem>
                       ))
                     )}
                   </SelectContent>
                 </Select>
-                {errors.conductorId && (
-                  <p className="text-xs text-destructive mt-1">{errors.conductorId.message}</p>
+                {errors.busId && (
+                  <p className="text-xs text-destructive mt-1">{errors.busId.message}</p>
                 )}
               </div>
             </div>
+
+            {/* Selected bus info */}
+            {selectedBusInfo && (
+              <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+                <div className="flex items-center gap-2">
+                  <BusIcon className="w-4 h-4 text-primary" />
+                  <span className="font-medium">Placa: {selectedBusInfo.bus.placa}</span>
+                  <span className="text-muted-foreground">({selectedBusInfo.bus.marca} {selectedBusInfo.bus.modelo})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <span>Hora despacho: {selectedBusInfo.hora}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-muted-foreground" />
+                  <span>Conduce: {selectedBusInfo.conductorNombre}</span>
+                </div>
+              </div>
+            )}
 
             <div>
               <Label className="flex items-center gap-1">
@@ -333,6 +416,12 @@ export function EnvioDineroForm({ onSubmit, loading, municipioOrigen }: EnvioDin
             <p className="text-xs text-muted-foreground">
               Origen: {municipioOrigen.nombre}
             </p>
+            {selectedBusInfo && (
+              <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
+                <p>Placa: <span className="font-medium text-foreground">{selectedBusInfo.bus.placa}</span></p>
+                <p>Hora: <span className="font-medium text-foreground">{selectedBusInfo.hora}</span></p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -341,7 +430,7 @@ export function EnvioDineroForm({ onSubmit, loading, municipioOrigen }: EnvioDin
       <div className="flex justify-end">
         <Button
           type="submit"
-          disabled={loading || conductoresDisponibles.length === 0}
+          disabled={loading || busesDisponibles.length === 0 || !watchBusId}
           className="gap-2 min-w-[200px]"
           size="lg"
         >

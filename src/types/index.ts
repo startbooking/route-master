@@ -47,6 +47,9 @@ export interface Bus {
   estado: EstadoBus;
   conductorAsignado?: Conductor;
   conductoresAsociados?: Conductor[]; // Varios conductores pueden estar asignados a un bus
+  // Campos adicionales para envío de dinero
+  rutaActual?: Ruta;
+  horaDespacho?: string;
 }
 
 export interface Pasajero {
@@ -152,15 +155,23 @@ export interface EnvioDinero {
     nombreCompleto: string;
     telefono?: string;
   };
+  receptor?: {
+    numeroDocumento: string;
+    nombreCompleto: string;
+    telefono?: string;
+    fechaRecepcion: string;
+  };
   monto: number;
   comision: number;
   montoTotal: number;
   conductor: Conductor;
+  bus: Bus; // Bus que transporta el dinero
   municipioOrigen: Municipio;
   municipioDestino: Municipio;
   planilla?: PlanillaDespacho;
   estado: EstadoEnvio;
   fechaCreacion: string;
+  horaDespacho: string; // Hora del despacho del bus
   fechaEntrega?: string;
   observaciones?: string;
 }
@@ -174,8 +185,15 @@ export interface CreateEnvioDineroDTO {
   destinatarioNombre: string;
   destinatarioTelefono?: string;
   monto: number;
-  conductorId: number;
+  busId: number; // Bus seleccionado para el envío
   municipioDestinoId: number;
   planillaId?: number;
   observaciones?: string;
+}
+
+export interface ReciboEnvioDineroDTO {
+  envioId: number;
+  receptorDocumento: string;
+  receptorNombre: string;
+  receptorTelefono?: string;
 }
