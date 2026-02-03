@@ -1,6 +1,11 @@
+// ============================================
+// USE ENVIO DINERO HOOK - Gestión de envíos de dinero
+// Includes support for receipts: remitente, conductor, receptor
+// ============================================
+
 import { useState, useCallback } from 'react';
-import { EnvioDinero, CreateEnvioDineroDTO, Conductor, Municipio } from '@/types';
-import { mockMunicipios, mockConductores } from '@/data/mockData';
+import { EnvioDinero, CreateEnvioDineroDTO, Municipio, ReciboEnvioDineroDTO } from '@/types';
+import { mockMunicipios, mockBuses, mockPlanillas } from '@/data/mockData';
 import { toast } from '@/hooks/use-toast';
 import { usePrinter } from '@/hooks/usePrinter';
 import { 
@@ -8,6 +13,9 @@ import {
   buildEnvioReciboBytes, 
   generateEnvioReciboHTML 
 } from '@/lib/thermalPrinter';
+
+// Receipt type for thermal printing
+type ReciboTipo = 'remitente' | 'conductor' | 'receptor';
 
 // Mock data for envios
 const mockEnvios: EnvioDinero[] = [];
@@ -46,12 +54,23 @@ export function useEnvioDinero() {
         return null;
       }
 
-      // Buscar conductor
-      const conductor = mockConductores.find(c => c.id === dto.conductorId);
+      // Buscar bus
+      const bus = mockBuses.find(b => b.id === dto.busId);
+      if (!bus) {
+        toast({
+          title: 'Error',
+          description: 'Bus no encontrado',
+          variant: 'destructive',
+        });
+        return null;
+      }
+
+      // Buscar conductor asignado al bus
+      const conductor = bus.conductorAsignado;
       if (!conductor) {
         toast({
           title: 'Error',
-          description: 'Conductor no encontrado',
+          description: 'El bus no tiene conductor asignado',
           variant: 'destructive',
         });
         return null;
@@ -67,6 +86,15 @@ export function useEnvioDinero() {
         });
         return null;
       }
+
+      // Buscar planilla del bus para obtener la hora
+      const planilla = mockPlanillas.find(p => 
+        p.bus.id === bus.id && 
+        (p.estado === 'DESPACHADO' || p.estado === 'PROGRAMADO')
+      );
+      
+      const horaDespacho = planilla?.horaProgramada || 
+        new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
 
       // Simular delay de red
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -92,10 +120,13 @@ export function useEnvioDinero() {
         comision,
         montoTotal,
         conductor,
+        bus,
         municipioOrigen,
         municipioDestino,
+        planilla,
         estado: 'PENDIENTE',
         fechaCreacion: new Date().toISOString(),
+        horaDespacho,
         observaciones: dto.observaciones,
       };
 
@@ -104,7 +135,7 @@ export function useEnvioDinero() {
 
       toast({
         title: '¡Envío registrado!',
-        description: `Número: ${newEnvio.numeroEnvio}`,
+        description: `Número: ${newEnvio.numeroEnvio} - Bus: ${bus.placa}`,
       });
 
       // Auto print receipts
@@ -153,7 +184,7 @@ export function useEnvioDinero() {
     }
   };
 
-  const printEnvioWindow = (envio: EnvioDinero, tipo: 'remitente' | 'conductor') => {
+  const printEnvioWindow = (envio: EnvioDinero, tipo: ReciboTipo) => {
     const html = generateEnvioReciboHTML(envio, tipo);
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (printWindow) {
@@ -191,24 +222,46 @@ export function useEnvioDinero() {
     }
   }, []);
 
-  const markAsDelivered = useCallback(async (envioId: number): Promise<boolean> => {
+  const markAsDelivered = useCallback(async (
+    envioId: number, 
+    recibo: ReciboEnvioDineroDTO
+  ): Promise<boolean> => {
     setLoading(true);
 
     try {
       await new Promise(resolve => setTimeout(resolve, 300));
 
+      let updatedEnvio: EnvioDinero | null = null;
+
       setEnvios(prev =>
-        prev.map(e =>
-          e.id === envioId 
-            ? { ...e, estado: 'ENTREGADO' as const, fechaEntrega: new Date().toISOString() } 
-            : e
-        )
+        prev.map(e => {
+          if (e.id === envioId) {
+            updatedEnvio = { 
+              ...e, 
+              estado: 'ENTREGADO' as const, 
+              fechaEntrega: new Date().toISOString(),
+              receptor: {
+                numeroDocumento: recibo.receptorDocumento,
+                nombreCompleto: recibo.receptorNombre,
+                telefono: recibo.receptorTelefono,
+                fechaRecepcion: new Date().toISOString(),
+              }
+            };
+            return updatedEnvio;
+          }
+          return e;
+        })
       );
 
       toast({
         title: 'Envío entregado',
-        description: 'El envío ha sido marcado como entregado',
+        description: `Recibido por: ${recibo.receptorNombre}`,
       });
+
+      // Print receptor receipt
+      if (updatedEnvio) {
+        await printReciboReceptor(updatedEnvio);
+      }
 
       return true;
     } catch {
@@ -217,6 +270,19 @@ export function useEnvioDinero() {
       setLoading(false);
     }
   }, []);
+
+  const printReciboReceptor = async (envio: EnvioDinero) => {
+    try {
+      if (printer.isConnected) {
+        const receptorBytes = buildEnvioReciboBytes(envio, 'receptor');
+        await thermalPrinter.printBytes(receptorBytes);
+      } else {
+        printEnvioWindow(envio, 'receptor');
+      }
+    } catch (error) {
+      console.error('Error printing receptor receipt:', error);
+    }
+  };
 
   return {
     envios,

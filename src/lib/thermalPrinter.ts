@@ -667,8 +667,8 @@ function formatEnvioTime(dateStr: string): string {
   });
 }
 
-// Build ESC/POS byte array for envio receipt
-export function buildEnvioReciboBytes(envio: EnvioDinero, tipo: 'remitente' | 'conductor'): Uint8Array {
+// Build ESC/POS byte array for envio receipt - supports remitente, conductor, and receptor
+export function buildEnvioReciboBytes(envio: EnvioDinero, tipo: 'remitente' | 'conductor' | 'receptor'): Uint8Array {
   const parts: Uint8Array[] = [];
   
   const addCommand = (cmd: Uint8Array) => parts.push(cmd);
@@ -700,10 +700,18 @@ export function buildEnvioReciboBytes(envio: EnvioDinero, tipo: 'remitente' | 'c
   addLine();
   addCommand(ESCPOSCommands.boldOn);
   addCommand(ESCPOSCommands.doubleHeight);
-  addText('RECIBO ENVÍO DE DINERO');
-  addLine();
-  addCommand(ESCPOSCommands.normalSize);
-  addText(tipo === 'conductor' ? '(COPIA CONDUCTOR)' : '(COPIA CLIENTE)');
+  
+  if (tipo === 'receptor') {
+    addText('RECIBO DE DINERO');
+    addLine();
+    addCommand(ESCPOSCommands.normalSize);
+    addText('(COMPROBANTE ENTREGA)');
+  } else {
+    addText('RECIBO ENVÍO DE DINERO');
+    addLine();
+    addCommand(ESCPOSCommands.normalSize);
+    addText(tipo === 'conductor' ? '(COPIA CONDUCTOR)' : '(COPIA CLIENTE)');
+  }
   addLine();
   addCommand(ESCPOSCommands.boldOff);
   addCommand(ESCPOSCommands.separator);
@@ -719,6 +727,33 @@ export function buildEnvioReciboBytes(envio: EnvioDinero, tipo: 'remitente' | 'c
   addText(`Fecha: ${formatEnvioDate(envio.fechaCreacion)}`);
   addLine();
   addText(`Hora: ${formatEnvioTime(envio.fechaCreacion)}`);
+  addLine();
+  addLine();
+  
+  // === TRANSPORTE INFO ===
+  addCommand(ESCPOSCommands.alignCenter);
+  addCommand(ESCPOSCommands.dottedSeparator);
+  addLine();
+  addCommand(ESCPOSCommands.boldOn);
+  addText('DATOS DEL TRANSPORTE');
+  addLine();
+  addCommand(ESCPOSCommands.dottedSeparator);
+  addLine();
+  addCommand(ESCPOSCommands.boldOff);
+  addCommand(ESCPOSCommands.alignLeft);
+  addLine();
+  
+  addText(`Placa: ${envio.bus.placa}`);
+  addLine();
+  if (envio.bus.marca || envio.bus.modelo) {
+    addText(`Vehículo: ${envio.bus.marca || ''} ${envio.bus.modelo || ''}`);
+    addLine();
+  }
+  addText(`Hora Despacho: ${envio.horaDespacho}`);
+  addLine();
+  addText(`Conduce: ${envio.conductor.nombreCompleto}`);
+  addLine();
+  addText(`Lic: ${envio.conductor.licenciaNumero}`);
   addLine();
   addLine();
   
@@ -770,13 +805,13 @@ export function buildEnvioReciboBytes(envio: EnvioDinero, tipo: 'remitente' | 'c
   addLine();
   addLine();
   
-  // === CONDUCTOR (Solo en recibo conductor) ===
-  if (tipo === 'conductor') {
+  // === RECEPTOR (Solo en recibo receptor) ===
+  if (tipo === 'receptor' && envio.receptor) {
     addCommand(ESCPOSCommands.alignCenter);
     addCommand(ESCPOSCommands.dottedSeparator);
     addLine();
     addCommand(ESCPOSCommands.boldOn);
-    addText('CONDUCTOR RESPONSABLE');
+    addText('RECIBIDO POR');
     addLine();
     addCommand(ESCPOSCommands.dottedSeparator);
     addLine();
@@ -784,9 +819,17 @@ export function buildEnvioReciboBytes(envio: EnvioDinero, tipo: 'remitente' | 'c
     addCommand(ESCPOSCommands.alignLeft);
     addLine();
     
-    addText(`Nombre: ${envio.conductor.nombreCompleto}`);
+    addText(`Nombre: ${envio.receptor.nombreCompleto}`);
     addLine();
-    addText(`Lic: ${envio.conductor.licenciaNumero}`);
+    addText(`Doc: ${envio.receptor.numeroDocumento}`);
+    addLine();
+    if (envio.receptor.telefono) {
+      addText(`Tel: ${envio.receptor.telefono}`);
+      addLine();
+    }
+    addText(`Fecha: ${formatEnvioDate(envio.receptor.fechaRecepcion)}`);
+    addLine();
+    addText(`Hora: ${formatEnvioTime(envio.receptor.fechaRecepcion)}`);
     addLine();
     addLine();
   }
@@ -818,7 +861,12 @@ export function buildEnvioReciboBytes(envio: EnvioDinero, tipo: 'remitente' | 'c
   addLine();
   addCommand(ESCPOSCommands.boldOn);
   addCommand(ESCPOSCommands.doubleHeight);
-  addText(`TOTAL    ${formatEnvioCurrency(envio.montoTotal)}`);
+  
+  if (tipo === 'receptor') {
+    addText(`MONTO RECIBIDO  ${formatEnvioCurrency(envio.monto)}`);
+  } else {
+    addText(`TOTAL    ${formatEnvioCurrency(envio.montoTotal)}`);
+  }
   addLine();
   addCommand(ESCPOSCommands.normalSize);
   addCommand(ESCPOSCommands.boldOff);
@@ -843,12 +891,12 @@ export function buildEnvioReciboBytes(envio: EnvioDinero, tipo: 'remitente' | 'c
   addLine();
   addLine();
   
-  // === FIRMA (Solo conductor) ===
-  if (tipo === 'conductor') {
+  // === FIRMA ===
+  if (tipo === 'conductor' || tipo === 'receptor') {
     addCommand(ESCPOSCommands.alignCenter);
     addText('_____________________________');
     addLine();
-    addText('Firma del Conductor');
+    addText(tipo === 'conductor' ? 'Firma del Conductor' : 'Firma del Receptor');
     addLine();
     addLine();
   }
@@ -863,12 +911,18 @@ export function buildEnvioReciboBytes(envio: EnvioDinero, tipo: 'remitente' | 'c
     addText('Conserve este recibo como');
     addLine();
     addText('comprobante del envío');
-  } else {
+  } else if (tipo === 'conductor') {
     addText('DOCUMENTO DEL CONDUCTOR');
     addLine();
     addText('Este recibo es responsabilidad');
     addLine();
     addText('del conductor hasta la entrega');
+  } else {
+    addText('COMPROBANTE DE ENTREGA');
+    addLine();
+    addText('El dinero ha sido entregado');
+    addLine();
+    addText('correctamente al receptor');
   }
   addLine();
   addCommand(ESCPOSCommands.separator);
@@ -891,13 +945,45 @@ export function buildEnvioReciboBytes(envio: EnvioDinero, tipo: 'remitente' | 'c
 }
 
 // Generate printable HTML for envio receipt
-export function generateEnvioReciboHTML(envio: EnvioDinero, tipo: 'remitente' | 'conductor'): string {
+export function generateEnvioReciboHTML(envio: EnvioDinero, tipo: 'remitente' | 'conductor' | 'receptor'): string {
+  const getTitleText = () => {
+    if (tipo === 'receptor') return 'RECIBO DE DINERO';
+    return 'RECIBO ENVÍO DE DINERO';
+  };
+  
+  const getSubtitleText = () => {
+    if (tipo === 'receptor') return '(COMPROBANTE ENTREGA)';
+    return tipo === 'conductor' ? '(COPIA CONDUCTOR)' : '(COPIA CLIENTE)';
+  };
+  
+  const getFooterText = () => {
+    if (tipo === 'remitente') {
+      return `
+        <p>¡Gracias por su confianza!</p>
+        <p>Conserve este recibo como</p>
+        <p>comprobante del envío</p>
+      `;
+    } else if (tipo === 'conductor') {
+      return `
+        <p>DOCUMENTO DEL CONDUCTOR</p>
+        <p>Este recibo es responsabilidad</p>
+        <p>del conductor hasta la entrega</p>
+      `;
+    } else {
+      return `
+        <p>COMPROBANTE DE ENTREGA</p>
+        <p>El dinero ha sido entregado</p>
+        <p>correctamente al receptor</p>
+      `;
+    }
+  };
+  
   return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Recibo Envío ${envio.numeroEnvio} - ${tipo === 'conductor' ? 'Conductor' : 'Cliente'}</title>
+  <title>Recibo Envío ${envio.numeroEnvio} - ${tipo === 'conductor' ? 'Conductor' : tipo === 'receptor' ? 'Receptor' : 'Cliente'}</title>
   <style>
     @page {
       size: 80mm auto;
@@ -933,14 +1019,24 @@ export function generateEnvioReciboHTML(envio: EnvioDinero, tipo: 'remitente' | 
   
   <div class="separator"></div>
   <div class="center bold">
-    <p class="double">RECIBO ENVÍO DE DINERO</p>
-    <p>${tipo === 'conductor' ? '(COPIA CONDUCTOR)' : '(COPIA CLIENTE)'}</p>
+    <p class="double">${getTitleText()}</p>
+    <p>${getSubtitleText()}</p>
   </div>
   <div class="separator"></div>
   
   <p class="bold">No. Envío: ${envio.numeroEnvio}</p>
   <p>Fecha: ${formatEnvioDate(envio.fechaCreacion)}</p>
   <p>Hora: ${formatEnvioTime(envio.fechaCreacion)}</p>
+  
+  <div class="separator"></div>
+  <h2 class="center">DATOS DEL TRANSPORTE</h2>
+  <div class="separator"></div>
+  
+  <p><strong>Placa:</strong> ${envio.bus.placa}</p>
+  ${envio.bus.marca || envio.bus.modelo ? `<p>Vehículo: ${envio.bus.marca || ''} ${envio.bus.modelo || ''}</p>` : ''}
+  <p>Hora Despacho: ${envio.horaDespacho}</p>
+  <p>Conduce: ${envio.conductor.nombreCompleto}</p>
+  <p>Licencia: ${envio.conductor.licenciaNumero}</p>
   
   <div class="separator"></div>
   <h2 class="center">DATOS DEL REMITENTE</h2>
@@ -959,13 +1055,16 @@ export function generateEnvioReciboHTML(envio: EnvioDinero, tipo: 'remitente' | 
   ${envio.destinatario.telefono ? `<p>Tel: ${envio.destinatario.telefono}</p>` : ''}
   <p>Ciudad: ${envio.municipioDestino.nombre}</p>
   
-  ${tipo === 'conductor' ? `
+  ${tipo === 'receptor' && envio.receptor ? `
   <div class="separator"></div>
-  <h2 class="center">CONDUCTOR RESPONSABLE</h2>
+  <h2 class="center">RECIBIDO POR</h2>
   <div class="separator"></div>
   
-  <p>Nombre: ${envio.conductor.nombreCompleto}</p>
-  <p>Licencia: ${envio.conductor.licenciaNumero}</p>
+  <p><strong>Nombre:</strong> ${envio.receptor.nombreCompleto}</p>
+  <p>Doc: ${envio.receptor.numeroDocumento}</p>
+  ${envio.receptor.telefono ? `<p>Tel: ${envio.receptor.telefono}</p>` : ''}
+  <p>Fecha: ${formatEnvioDate(envio.receptor.fechaRecepcion)}</p>
+  <p>Hora: ${formatEnvioTime(envio.receptor.fechaRecepcion)}</p>
   ` : ''}
   
   <div class="separator"></div>
@@ -985,8 +1084,8 @@ export function generateEnvioReciboHTML(envio: EnvioDinero, tipo: 'remitente' | 
   </div>
   <div class="separator"></div>
   <div class="row total">
-    <span>TOTAL</span>
-    <span>${formatEnvioCurrency(envio.montoTotal)}</span>
+    <span>${tipo === 'receptor' ? 'MONTO RECIBIDO' : 'TOTAL'}</span>
+    <span>${tipo === 'receptor' ? formatEnvioCurrency(envio.monto) : formatEnvioCurrency(envio.montoTotal)}</span>
   </div>
   <div class="separator"></div>
   
@@ -995,23 +1094,15 @@ export function generateEnvioReciboHTML(envio: EnvioDinero, tipo: 'remitente' | 
     <div id="qrcode" style="margin: 10px auto;"></div>
   </div>
   
-  ${tipo === 'conductor' ? `
+  ${tipo === 'conductor' || tipo === 'receptor' ? `
   <div class="signature center">
-    <p>Firma del Conductor</p>
+    <p>${tipo === 'conductor' ? 'Firma del Conductor' : 'Firma del Receptor'}</p>
   </div>
   ` : ''}
   
   <div class="separator"></div>
   <div class="center">
-    ${tipo === 'remitente' ? `
-    <p>¡Gracias por su confianza!</p>
-    <p>Conserve este recibo como</p>
-    <p>comprobante del envío</p>
-    ` : `
-    <p>DOCUMENTO DEL CONDUCTOR</p>
-    <p>Este recibo es responsabilidad</p>
-    <p>del conductor hasta la entrega</p>
-    `}
+    ${getFooterText()}
   </div>
   <div class="separator"></div>
   
