@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
+import { Footer } from '@/components/layout/Footer';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { Bus, MapPin, Ticket, Users } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,12 +32,12 @@ const Index = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Navbar superior */}
       <Navbar onLoginClick={() => setLoginOpen(true)} />
 
       {/* Hero Section */}
-      <main className="container mx-auto px-4 py-16">
+      <main className="container mx-auto px-4 py-16 flex-1">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Sistema de Boletería para{' '}
@@ -81,6 +82,9 @@ const Index = () => {
           </button>
         </div>
       </main>
+
+      {/* Footer */}
+      <Footer />
 
       {/* Login Modal */}
       <LoginModal open={loginOpen} onOpenChange={setLoginOpen} />
