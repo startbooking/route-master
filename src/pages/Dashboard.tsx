@@ -58,9 +58,9 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header del Dashboard */}
-      <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 shadow-sm">
+    <div className="h-screen flex flex-col overflow-hidden bg-background">
+      {/* Header del Dashboard - Fijo */}
+      <header className="h-16 flex-shrink-0 border-b border-border bg-card flex items-center justify-between px-6 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
             <Bus className="w-6 h-6 text-primary-foreground" />
@@ -139,116 +139,122 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Contenido principal */}
-      <main className="container mx-auto px-4 py-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
+      {/* Tabs Container - Estructura con tabs fijos y contenido scrollable */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+        {/* TabsList - Fijo debajo del header */}
+        <div className="flex-shrink-0 bg-card border-b border-border px-4 md:px-6">
+          <TabsList className="h-12">
             <TabsTrigger value="dashboard" className="gap-2">
               <LayoutDashboard className="w-4 h-4" />
-              Dashboard
+              <span className="hidden sm:inline">Dashboard</span>
             </TabsTrigger>
             <TabsTrigger value="tickets" className="gap-2">
               <Ticket className="w-4 h-4" />
-              Tickets
+              <span className="hidden sm:inline">Tickets</span>
             </TabsTrigger>
             <TabsTrigger value="envios" className="gap-2">
               <Send className="w-4 h-4" />
-              Envíos
+              <span className="hidden sm:inline">Envíos</span>
             </TabsTrigger>
             <TabsTrigger value="buses" className="gap-2">
               <Bus className="w-4 h-4" />
-              Buses
+              <span className="hidden sm:inline">Buses</span>
             </TabsTrigger>
           </TabsList>
+        </div>
 
-          {/* Dashboard Tab */}
-          <TabsContent value="dashboard" className="space-y-6">
-            <DashboardStats />
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <h2 className="text-lg font-semibold mb-4">Últimos Tickets</h2>
-                <TicketList 
-                  tickets={tickets.slice(0, 5)} 
-                  onCancel={cancelTicket} 
-                />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold mb-4">Flota de Buses</h2>
-                <BusList />
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* Tickets Tab */}
-          <TabsContent value="tickets" className="space-y-6">
-            {showTicketForm ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold">Crear Nuevo Ticket</h2>
-                  <Button variant="outline" onClick={() => setShowTicketForm(false)}>
-                    Ver Lista de Tickets
-                  </Button>
-                </div>
-                <TicketForm onSubmit={createTicket} loading={loading} />
-              </>
-            ) : (
-              <>
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold">Tickets Vendidos</h2>
-                  <Button onClick={() => setShowTicketForm(true)} className="gap-2">
-                    <PlusCircle className="w-4 h-4" />
-                    Nuevo Ticket
-                  </Button>
-                </div>
-                <TicketList tickets={tickets} onCancel={cancelTicket} />
-              </>
-            )}
-          </TabsContent>
-
-          {/* Envios Tab */}
-          <TabsContent value="envios" className="space-y-6">
-            {showEnvioForm ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold">Nuevo Envío de Dinero</h2>
-                  <Button variant="outline" onClick={() => setShowEnvioForm(false)}>
-                    Ver Lista de Envíos
-                  </Button>
-                </div>
-                {user?.municipio && (
-                  <EnvioDineroForm 
-                    onSubmit={createEnvio} 
-                    loading={enviosLoading} 
-                    municipioOrigen={user.municipio}
+        {/* Contenido principal - Scrollable */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="container mx-auto px-4 py-6">
+            {/* Dashboard Tab */}
+            <TabsContent value="dashboard" className="space-y-6 mt-0">
+              <DashboardStats />
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                  <h2 className="text-lg font-semibold mb-4">Últimos Tickets</h2>
+                  <TicketList 
+                    tickets={tickets.slice(0, 5)} 
+                    onCancel={cancelTicket} 
                   />
-                )}
-              </>
-            ) : (
-              <>
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold">Envíos de Dinero</h2>
-                  <Button onClick={() => setShowEnvioForm(true)} className="gap-2">
-                    <PlusCircle className="w-4 h-4" />
-                    Nuevo Envío
-                  </Button>
                 </div>
-                <EnvioList 
-                  envios={envios} 
-                  onCancel={cancelEnvio}
-                  onMarkDelivered={markAsDelivered}
-                />
-              </>
-            )}
-          </TabsContent>
+                <div>
+                  <h2 className="text-lg font-semibold mb-4">Flota de Buses</h2>
+                  <BusList />
+                </div>
+              </div>
+            </TabsContent>
 
-          {/* Buses Tab */}
-          <TabsContent value="buses">
-            <h2 className="text-xl font-bold mb-6">Gestión de Flota</h2>
-            <BusList />
-          </TabsContent>
-        </Tabs>
-      </main>
+            {/* Tickets Tab */}
+            <TabsContent value="tickets" className="space-y-6 mt-0">
+              {showTicketForm ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold">Crear Nuevo Ticket</h2>
+                    <Button variant="outline" onClick={() => setShowTicketForm(false)}>
+                      Ver Lista de Tickets
+                    </Button>
+                  </div>
+                  <TicketForm onSubmit={createTicket} loading={loading} />
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold">Tickets Vendidos</h2>
+                    <Button onClick={() => setShowTicketForm(true)} className="gap-2">
+                      <PlusCircle className="w-4 h-4" />
+                      Nuevo Ticket
+                    </Button>
+                  </div>
+                  <TicketList tickets={tickets} onCancel={cancelTicket} />
+                </>
+              )}
+            </TabsContent>
+
+            {/* Envios Tab */}
+            <TabsContent value="envios" className="space-y-6 mt-0">
+              {showEnvioForm ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold">Nuevo Envío de Dinero</h2>
+                    <Button variant="outline" onClick={() => setShowEnvioForm(false)}>
+                      Ver Lista de Envíos
+                    </Button>
+                  </div>
+                  {user?.municipio && (
+                    <EnvioDineroForm 
+                      onSubmit={createEnvio} 
+                      loading={enviosLoading} 
+                      municipioOrigen={user.municipio}
+                    />
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold">Envíos de Dinero</h2>
+                    <Button onClick={() => setShowEnvioForm(true)} className="gap-2">
+                      <PlusCircle className="w-4 h-4" />
+                      Nuevo Envío
+                    </Button>
+                  </div>
+                  <EnvioList 
+                    envios={envios} 
+                    onCancel={cancelEnvio}
+                    onMarkDelivered={markAsDelivered}
+                  />
+                </>
+              )}
+            </TabsContent>
+
+            {/* Buses Tab */}
+            <TabsContent value="buses" className="mt-0">
+              <h2 className="text-xl font-bold mb-6">Gestión de Flota</h2>
+              <BusList />
+            </TabsContent>
+          </div>
+        </main>
+      </Tabs>
 
       {/* Modal de Consolidado */}
       <ConsolidatedReport 
@@ -256,7 +262,6 @@ export default function Dashboard() {
         onOpenChange={setShowConsolidated}
         tickets={tickets}
       />
-
     </div>
   );
 }
